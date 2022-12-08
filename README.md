@@ -34,3 +34,147 @@ One key differentiating factor between Bloc and Cubit is that because Bloc is ev
 We can do this by overriding onTransition. The change from one state to another is called a Transition.
 A Transition consists of the current state, the event, and the next state.
 onTransition is invoked before onChange and contains the event which triggered the change from currentState to nextState.
+
+## context.read
+context.read<T>() looks up the closest ancestor instance of type T and is functionally equivalent to BlocProvider.of<T>(context). context.read is most commonly used for retrieving a bloc instance in order to add an event within onPressed callbacks.
+
+Note: context.read<T>() does not listen to T -- if the provided Object of type T changes, context.read will not trigger a widget rebuild.
+
+ DO use context.read to add events in callbacks.
+
+onPressed() {
+  context.read<CounterBloc>().add(CounterIncrementPressed()),
+}
+Copy to clipboardErrorCopied
+❌ AVOID using context.read to retrieve state within a build method.
+
+@override
+Widget build(BuildContext context) {
+  final state = context.read<MyBloc>().state;
+  return Text('$state');
+}
+The above usage is error prone because the Text widget will not be rebuilt if the state of the bloc changes.
+
+## context.watch
+Like context.read<T>(), context.watch<T>() provides the closest ancestor instance of type T, however it also listens to changes on the instance. It is functionally equivalent to BlocProvider.of<T>(context, listen: true).
+
+If the provided Object of type T changes, context.watch will trigger a rebuild.
+
+context.watch is only accessible within the build method of a StatelessWidget or State class.
+
+DO use BlocBuilder instead of context.watch to explicitly scope rebuilds.
+# //
+Widget build(BuildContext context) {
+  return MaterialApp(
+    home: Scaffold(
+      body: BlocBuilder<MyBloc, MyState>(
+        builder: (context, state) {
+          // Whenever the state changes, only the Text is rebuilt.
+          return Text(state.value);
+        },
+      ),
+    ),
+  );
+}
+
+Alternatively, use a Builder to scope rebuilds.
+
+@override
+Widget build(BuildContext context) {
+  return MaterialApp(
+    home: Scaffold(
+      body: Builder(
+        builder: (context) {
+          // Whenever the state changes, only the Text is rebuilt.
+          final state = context.watch<MyBloc>().state;
+          return Text(state.value);
+        },
+      ),
+    ),
+  );
+
+ DO use Builder and context.watch as MultiBlocBuilder.
+
+Builder(
+  builder: (context) {
+    final stateA = context.watch<BlocA>().state;
+    final stateB = context.watch<BlocB>().state;
+    final stateC = context.watch<BlocC>().state;
+
+    // return a Widget which depends on the state of BlocA, BlocB, and BlocC
+  }
+)
+
+AVOID using context.watch when the parent widget in the build method doesn't depend on the state.
+
+@override
+Widget build(BuildContext context) {
+  // Whenever the state changes, the MaterialApp is rebuilt
+  // even though it is only used in the Text widget.
+  final state = context.watch<MyBloc>().state;
+  return MaterialApp(
+    home: Scaffold(
+      body: Text(state.value),
+    ),
+  );
+}
+Copy to clipboardErrorCopied
+Using context.watch at the root of the build method will result in the entire widget being rebuilt when the bloc state changes.
+
+## context.select
+Just like context.watch<T>(), context.select<T, R>(R function(T value)) provides the closest ancestor instance of type T and listens to changes on T. Unlike context.watch, context.select allows you listen for changes in a smaller part of a state.
+
+Widget build(BuildContext context) {
+  final name = context.select((ProfileBloc bloc) => bloc.state.name);
+  return Text(name);
+}
+The above will only rebuild the widget when the property name of the ProfileBloc's state changes.
+
+✅ DO use BlocSelector instead of context.select to explicitly scope rebuilds.
+
+Widget build(BuildContext context) {
+  return MaterialApp(
+    home: Scaffold(
+      body: BlocSelector<ProfileBloc, ProfileState, String>(
+        selector: (state) => state.name,
+        builder: (context, name) {
+          // Whenever the state.name changes, only the Text is rebuilt.
+          return Text(name);
+        },
+      ),
+    ),
+  );
+}
+Copy to clipboardErrorCopied
+Alternatively, use a Builder to scope rebuilds.
+
+@override
+Widget build(BuildContext context) {
+  return MaterialApp(
+    home: Scaffold(
+      body: Builder(
+        builder: (context) {
+          // Whenever state.name changes, only the Text is rebuilt.
+          final name = context.select((ProfileBloc bloc) => bloc.state.name);
+          return Text(name);
+        },
+      ),
+    ),
+  );
+}
+Copy to clipboardErrorCopied
+❌ AVOID using context.select when the parent widget in a build method doesn't depend on the state.
+
+@override
+Widget build(BuildContext context) {
+  // Whenever the state.value changes, the MaterialApp is rebuilt
+  // even though it is only used in the Text widget.
+  final name = context.select((ProfileBloc bloc) => bloc.state.name);
+  return MaterialApp(
+    home: Scaffold(
+      body: Text(name),
+    ),
+  );
+}
+Copy to clipboardErrorCopied
+Using context.select at the root of the build method will result in the entire widget being rebuilt when the selection changes.
